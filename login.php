@@ -1,47 +1,31 @@
 <?php
 session_start();
-$servername = "localhost";
-$username = "root";
-$password = "Gogliko123$";
-$database = "roboshop";
+$connection = new mysqli("localhost", "root", "Gogliko123$", "roboshop");
 
-$conn = new mysqli($servername, $username, $password, $database);
-
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+if ($connection->connect_error) {
+    die("Connection failed: " . $connection->connect_error);
 }
 
-$error = "";
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $email = trim($_POST["email"]);
-    $password = trim($_POST["password"]);
+    $username = $_POST["username"];
+    $password = $_POST["password"];
 
-    if (empty($email) || empty($password)) {
-        $error = "Both fields are required!";
-    } elseif (strpos($email, '@') === false) { // Check if the email contains '@'
-        $error = "Please enter a valid email address!";
-    } else {
-        $sql = "SELECT id, username, password FROM users WHERE email = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $stmt->store_result();
-        $stmt->bind_result($id, $username, $hashed_password);
-        $stmt->fetch();
+    $sql = "SELECT * FROM users WHERE username='$username'";
+    $result = $connection->query($sql);
 
-        if ($stmt->num_rows > 0 && password_verify($password, $hashed_password)) {
-            $_SESSION["user_id"] = $id;
-            $_SESSION["username"] = $username;
-            header("Location: index.php");
-            exit();
+    if ($result->num_rows > 0) {
+        $user = $result->fetch_assoc();
+        if (password_verify($password, $user["password"])) {
+            $_SESSION["user_id"] = $user["id"];
+            $_SESSION["username"] = $user["username"];
+            echo "<script>alert('Login successful!'); window.location.href='index.php';</script>";
         } else {
-            $error = "Invalid email or password!";
+            echo "<script>alert('Invalid password.');</script>";
         }
-
-        $stmt->close();
+    } else {
+        echo "<script>alert('No user found with that username.');</script>";
     }
 }
-$conn->close();
 ?>
 
 <!DOCTYPE html>
@@ -55,19 +39,14 @@ $conn->close();
 <body>
     <div class="container my-5">
         <h2>Login</h2>
-
-        <?php if (!empty($error)): ?>
-            <div class="alert alert-danger"><?php echo $error; ?></div>
-        <?php endif; ?>
-
-        <form method="post">
+        <form method="POST">
             <div class="mb-3">
-                <label for="text" class="form-label">Email</label>
-                <input type="text" class="form-control" id="email" name="email">
+                <label for="username" class="form-label">Username</label>
+                <input type="text" class="form-control" id="username" name="username" required>
             </div>
             <div class="mb-3">
                 <label for="password" class="form-label">Password</label>
-                <input type="password" class="form-control" id="password" name="password">
+                <input type="password" class="form-control" id="password" name="password" required>
             </div>
             <button type="submit" class="btn btn-primary">Login</button>
         </form>

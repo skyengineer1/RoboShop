@@ -1,85 +1,65 @@
 <?php
-$id = "";
+session_start();
+
+if (!isset($_SESSION["user_id"])) {
+    header("Location: login.php");
+    exit();
+}
+
+$id = $_GET['id'];
 $name = "";
 $type = "";
 $price = "";
 $image_path = "";
 $error = "";
+$image_error = "";
 
-if (isset($_GET["id"])) {
-    $id = $_GET["id"];
-    $connection = new mysqli("localhost", "root", "Gogliko123$", "roboshop");
+// Fetch existing robot details
+$servername = "localhost";
+$username = "root";
+$password = "Gogliko123$";
+$database = "roboshop";
 
-    if ($connection->connect_error) {
-        die("Connection failed: " . $connection->connect_error);
-    }
+$connection = new mysqli($servername, $username, $password, $database);
 
-    $sql = "SELECT * FROM robots WHERE id=?";
-    $stmt = $connection->prepare($sql);
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    if ($result->num_rows > 0) {
-        $row = $result->fetch_assoc();
-        $name = $row['name'];
-        $type = $row['type'];
-        $price = $row['price'];
-        $image_path = $row['image_path'];
-    } else {
-        $error = "Robot not found!";
-    }
-
-    $stmt->close();
-    $connection->close();
+if ($connection->connect_error) {
+    die("Connection failed: " . $connection->connect_error);
 }
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $id = $_POST["id"];
-    $name = $_POST["name"];
-    $type = $_POST["type"];
-    $price = $_POST["price"];
-    $image_path = $_POST["current_image"]; // Keep the existing image if no new file is uploaded
+$sql = "SELECT * FROM robots WHERE id = ?";
+$stmt = $connection->prepare($sql);
+$stmt->bind_param("i", $id);
+$stmt->execute();
+$result = $stmt->get_result();
+$robot = $result->fetch_assoc();
 
-    // Handle image upload
-    if ($_FILES['image']['error'] == UPLOAD_ERR_OK) {
-        $upload_dir = 'uploads/';
-        $image_path = $upload_dir . basename($_FILES["image"]["name"]);
-        $image_file_type = strtolower(pathinfo($image_path, PATHINFO_EXTENSION));
-        if (!in_array($image_file_type, ['jpg', 'jpeg', 'png', 'gif'])) {
-            $error = "Only image files (JPG, JPEG, PNG, GIF) are allowed.";
-        } elseif (move_uploaded_file($_FILES["image"]["tmp_name"], $image_path)) {
+if (!$robot) {
+    die("Robot not found.");
+}
+
+$name = $robot['name'];
+$type = $robot['type'];
+$price = $robot['price'];
+$image_path = $robot['image_path'];
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $robotId = $_POST["robot_id"];
+    $robotName = $_POST["robot_name"];
+    $uploadFile = "uploads/" . basename($_FILES["robot_image"]["name"]);
+
+    if (move_uploaded_file($_FILES["robot_image"]["tmp_name"], $uploadFile)) {
+        $sql = "UPDATE robots SET name='$robotName', image_path='$uploadFile', updatedAt=NOW() WHERE id='$robotId'";
+        if ($connection->query($sql) === TRUE) {
+            echo "<script>alert('Robot updated successfully!'); window.location.href='index.php';</script>";
         } else {
-            $error = "Sorry, there was an error uploading your file.";
+            echo "Error: " . $connection->error;
         }
-    }
-
-    if (empty($name) || empty($type) || empty($price)) {
-        $error = "All fields are required";
     } else {
-        $connection = new mysqli("localhost", "root", "Gogliko123$", "roboshop");
-
-        if ($connection->connect_error) {
-            die("Connection failed: " . $connection->connect_error);
-        }
-
-        $sql = "UPDATE robots SET name=?, type=?, price=?, image_path=? WHERE id=?";
-        $stmt = $connection->prepare($sql);
-        $stmt->bind_param("ssdsi", $name, $type, $price, $image_path, $id);
-
-        if ($stmt->execute()) {
-            $stmt->close();
-            $connection->close();
-            header("Location: /roboshop/index.php");
-            exit();
-        } else {
-            $error = "Error: " . $stmt->error;
-            $stmt->close();
-        }
-
-        $connection->close();
+        echo "<script>alert('Failed to upload image.');</script>";
     }
 }
+
+$connection->close();
 ?>
 
 <!DOCTYPE html>
@@ -99,11 +79,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <?php endif; ?>
 
         <form method="post" enctype="multipart/form-data">
-            <input type="hidden" name="id" value="<?php echo htmlspecialchars($id); ?>">
-            <input type="hidden" name="current_image" value="<?php echo htmlspecialchars($image_path); ?>">
             <div class="mb-3">
-                <label for="name" class="form-label">Name</label>
-                <input type="text" class="form-control" id="name" name="name" value="<?php echo htmlspecialchars($name); ?>">
+                <label for="robot_id" class="form-label">Robot ID</label>
+                <input type="text" class="form-control" id="robot_id" name="robot_id" value="<?php echo htmlspecialchars($id); ?>" readonly>
+            </div>
+            <div class="mb-3">
+                <label for="robot_name" class="form-label">Name</label>
+                <input type="text" class="form-control" id="robot_name" name="robot_name" value="<?php echo htmlspecialchars($name); ?>">
             </div>
             <div class="mb-3">
                 <label for="type" class="form-label">Type</label>
@@ -114,13 +96,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 <input type="text" class="form-control" id="price" name="price" value="<?php echo htmlspecialchars($price); ?>">
             </div>
             <div class="mb-3">
-                <label for="image" class="form-label">Upload Image</label>
-                <input type="file" class="form-control" id="image" name="image">
-                <?php if (!empty($image_path)): ?>
-                    <img src="<?php echo $image_path; ?>" alt="Robot Image" width="100">
+                <label for="robot_image" class="form-label">Upload Image</label>
+                <input type="file" class="form-control" id="robot_image" name="robot_image">
+                <?php if (!empty($image_error)): ?>
+                    <div class="alert alert-danger mt-2"><?php echo $image_error; ?></div>
                 <?php endif; ?>
             </div>
-            <button type="submit" class="btn btn-primary">Save</button>
+            <button type="submit" class="btn btn-primary">Update</button>
         </form>
     </div>
 </body>

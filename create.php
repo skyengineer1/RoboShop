@@ -11,6 +11,13 @@ $type = "";
 $price = "";
 $image_path = "";
 $error = "";
+$image_error = "";
+
+$connection = new mysqli("localhost", "root", "Gogliko123$", "roboshop");
+
+if ($connection->connect_error) {
+    die("Connection failed: " . $connection->connect_error);
+}
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $name = trim($_POST["name"]);
@@ -22,14 +29,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $upload_dir = 'uploads/'; // Directory to save uploaded images
         $image_path = $upload_dir . basename($_FILES["image"]["name"]);
 
-        // Check if the file is an image
-        $image_file_type = strtolower(pathinfo($image_path, PATHINFO_EXTENSION));
-        if (!in_array($image_file_type, ['jpg', 'jpeg', 'png', 'gif'])) {
-            $error = "Only image files (JPG, JPEG, PNG, GIF) are allowed.";
-        } elseif (move_uploaded_file($_FILES["image"]["tmp_name"], $image_path)) {
-            // File is successfully uploaded
-        } else {
-            $error = "Sorry, there was an error uploading your file.";
+        // Check file type (only allow images)
+        $allowed_image_types = ['image/jpeg', 'image/png', 'image/webp'];
+        $file_type = mime_content_type($_FILES['image']['tmp_name']);
+        $file_size = $_FILES['image']['size'];
+        $max_size = 10 * 1024 * 1024; // 10MB
+
+        // If the file is not an image or exceeds 10MB, set an error
+        if (!in_array($file_type, $allowed_image_types)) {
+            $image_error = "Only image files (JPG, JPEG, PNG, WEBP) are allowed.";
+        } elseif ($file_size > $max_size) {
+            $image_error = "File size must not exceed 10MB.";
+        } elseif (!move_uploaded_file($_FILES["image"]["tmp_name"], $image_path)) {
+            $image_error = "Sorry, there was an error uploading your file.";
         }
     }
 
@@ -42,26 +54,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $error = "Price is required";
     } elseif (!is_numeric($price)) {
         $error = "Price must be a number";
-    } else {
-        $servername = "localhost";
-        $username = "root";
-        $password = "Gogliko123$";
-        $database = "roboshop";
-
-        $connection = new mysqli($servername, $username, $password, $database);
-
-        if ($connection->connect_error) {
-            die("Connection failed: " . $connection->connect_error);
-        }
-
-        $sql = "INSERT INTO robots (name, type, price, image_path) VALUES (?, ?, ?, ?)";
+    } elseif (empty($image_error)) {
+        $sql = "INSERT INTO robots (name, type, price, image_path, createdAt, updatedAt) VALUES (?, ?, ?, ?, NOW(), NOW())";
         $stmt = $connection->prepare($sql);
         $stmt->bind_param("ssds", $name, $type, $price, $image_path); // 'ssds' means: string, string, double, string
 
         if ($stmt->execute()) {
             $stmt->close();
             $connection->close();
-            header("Location: /roboshop/index.php");
+            echo "<script>alert('Robot added successfully!'); window.location.href='index.php';</script>";
             exit();
         } else {
             $error = "Error: " . $stmt->error;
@@ -105,6 +106,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <div class="mb-3">
                 <label for="image" class="form-label">Upload Image</label>
                 <input type="file" class="form-control" id="image" name="image">
+                <?php if (!empty($image_error)): ?>
+                    <div class="alert alert-danger mt-2"><?php echo $image_error; ?></div>
+                <?php endif; ?>
             </div>
             <button type="submit" class="btn btn-primary">Add</button>
         </form>
