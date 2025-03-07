@@ -1,17 +1,15 @@
 <?php
-session_start(); // Start the session
+session_start();
 
 if (!isset($_SESSION["user_id"])) {
-    // Redirect users who are not logged in
     header("Location: login.php");
     exit();
 }
-?>
 
-<?php
 $name = "";
 $type = "";
 $price = "";
+$image_path = "";
 $error = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -19,6 +17,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $type = trim($_POST["type"]);
     $price = trim($_POST["price"]);
 
+    // Handle image upload
+    if ($_FILES['image']['error'] == UPLOAD_ERR_OK) {
+        $upload_dir = 'uploads/'; // Directory to save uploaded images
+        $image_path = $upload_dir . basename($_FILES["image"]["name"]);
+
+        // Check if the file is an image
+        $image_file_type = strtolower(pathinfo($image_path, PATHINFO_EXTENSION));
+        if (!in_array($image_file_type, ['jpg', 'jpeg', 'png', 'gif'])) {
+            $error = "Only image files (JPG, JPEG, PNG, GIF) are allowed.";
+        } elseif (move_uploaded_file($_FILES["image"]["tmp_name"], $image_path)) {
+            // File is successfully uploaded
+        } else {
+            $error = "Sorry, there was an error uploading your file.";
+        }
+    }
+
+    // Validate other fields
     if (empty($name)) {
         $error = "Name is required";
     } elseif (empty($type)) {
@@ -33,18 +48,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $password = "Gogliko123$";
         $database = "roboshop";
 
-        // Create connection
         $connection = new mysqli($servername, $username, $password, $database);
 
-        // Check connection
         if ($connection->connect_error) {
             die("Connection failed: " . $connection->connect_error);
         }
 
-        // Use prepared statement to prevent SQL injection
-        $sql = "INSERT INTO robots (name, type, price) VALUES (?, ?, ?)";
+        $sql = "INSERT INTO robots (name, type, price, image_path) VALUES (?, ?, ?, ?)";
         $stmt = $connection->prepare($sql);
-        $stmt->bind_param("ssd", $name, $type, $price); // 'ssd' means: string, string, double
+        $stmt->bind_param("ssds", $name, $type, $price, $image_path); // 'ssds' means: string, string, double, string
 
         if ($stmt->execute()) {
             $stmt->close();
@@ -77,7 +89,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <div class="alert alert-danger"><?php echo $error; ?></div>
         <?php endif; ?>
 
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             <div class="mb-3">
                 <label for="name" class="form-label">Name</label>
                 <input type="text" class="form-control" id="name" name="name" value="<?php echo htmlspecialchars($name); ?>">
@@ -89,6 +101,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <div class="mb-3">
                 <label for="price" class="form-label">Price</label>
                 <input type="text" class="form-control" id="price" name="price" value="<?php echo htmlspecialchars($price); ?>">
+            </div>
+            <div class="mb-3">
+                <label for="image" class="form-label">Upload Image</label>
+                <input type="file" class="form-control" id="image" name="image">
             </div>
             <button type="submit" class="btn btn-primary">Add</button>
         </form>
